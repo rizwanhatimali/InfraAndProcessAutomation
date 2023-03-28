@@ -1,0 +1,22 @@
+trigger:
+- master
+
+
+
+steps:
+
+  - task: Bash@3
+    displayName: Set Variables
+    inputs:
+      targetType: 'inline'
+      script: |
+        sed -i -r "s/AZP_TOKEN/AZP_TOKEN=$(AZP_TOKEN)/g" $(Build.SourcesDirectory)/docker-compose.yml
+
+  - task: DockerCompose@0
+    inputs:
+      containerregistrytype: 'Azure Container Registry'
+      azureSubscription: 'UKS Anchor'
+      azureContainerRegistry: '{"loginServer":"cranchorservices.azurecr.io", "id" : "/subscriptions/bb471d58-b53c-45c1-843c-a418e8903a84/resourceGroups/RG-UKSolnsAnchor-Common/providers/Microsoft.ContainerRegistry/registries/azureagent"}'
+      dockerComposeFile: '**/docker-compose.yml'
+      action: 'Run a Docker Compose command'
+      dockerComposeCommand: 'up -d'

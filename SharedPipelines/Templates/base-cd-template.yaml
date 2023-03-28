@@ -1,0 +1,13 @@
+parameters:
+  - name: Config
+    type: object
+
+stages:
+  - ${{ each env in parameters.Config.Environments }}: 
+    - template: StageTemplates/base-deployment-stage.yaml
+      parameters:
+        Config: ${{ parameters.Config }}
+        Environment: ${{ env }}
+
+
+  

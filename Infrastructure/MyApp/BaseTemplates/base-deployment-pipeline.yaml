@@ -1,0 +1,36 @@
+resources:
+  repositories:
+    - repository: SharedPipelines
+      type: git
+      name: Middleware/SharedPipelines
+    - repository: Common-Infrastructure
+      type: git
+      name: Middleware/Common-Infrastructure
+
+parameters:
+  - name: Type
+    type: string
+  - name: Extra
+    type: object
+    default: {}
+
+extends:
+  template: Templates\base-cd-template.yaml@SharedPipelines
+  parameters:
+    Config:
+      SharedRepository: SharedPipelines
+      CommonInfrastructure: Common-Infrastructure
+      ServiceConnection: eMobility Devops Service Principal
+      GlobalVariables: src/GlobalVariables.yaml@self
+      CommonVariables: src/CDR-Engine-Integration/Variables/Common.yaml@self
+      Variables: src/CDR-Engine-Integration/${{ parameters.Type }}/Variables/Common.yaml@self
+      BaseTemplate: ../Modules/${{ parameters.Type}}/deployment-group-steps.yaml
+      AgentPool: Cdr Build Agents
+      Extra: ${{ parameters.Extra }}
+      Environments:
+        - Name: Dev
+          Variables: src/CDR-Engine-Integration/Variables/Env/Dev.yaml@self
+        - Name: Qas
+          Variables: src/CDR-Engine-Integration/Variables/Env/Qas.yaml@self
+        - Name: Run
+          Variables: src/CDR-Engine-Integration/Variables/Env/Run.yaml@self

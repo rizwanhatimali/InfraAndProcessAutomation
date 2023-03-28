@@ -1,0 +1,143 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - ${{ if eq(parameters.stage.IsDeployment, true) }}:
+    - task: AzurePowerShell@5
+      name: CheckUser
+      displayName: Check if user identity exists
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/CheckIfUserAssignedIdentityExists.ps1
+        ScriptArguments: >
+          -resourceGroup $(ResourceGroup)
+          -subscription $(Subscription)
+          -userAssignedIdentityName $(UserIdentity)
+          -variableName UserIdExists
+    - task: AzureCLI@2
+      name:  CreateUser
+      displayName: Create user identity
+      condition: and(succeeded(), eq(variables['UserIdExists'], 'false'))
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        scriptType: 'pscore'
+        scriptLocation: 'scriptPath'
+        scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/Identity/CreateUserIdentity.ps1'
+        arguments: > # Use this to avoid newline characters in multiline string
+            -subscription $(Subscription)
+            -resourceGroup '$(ResourceGroup)'
+            -command ${{ parameters.stage.Command }}
+            -userAssignedIdentityName $(UserIdentity)
+            -location '$(Location)'
+        workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/Identity/
+    - task: AzurePowerShell@5
+      name: GetUserId
+      displayName: Get user identity principal id
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/GetUserAssignedIdentityPrincipalId.ps1
+        ScriptArguments: >
+          -resourceGroup $(ResourceGroup)
+          -subscription $(Subscription)
+          -userAssignedIdentityName $(UserIdentity)
+          -variableName PrincipalId
+    - task: AzurePowerShell@5
+      name: AssignKeyVaultAccess 
+      displayName: Add user identity key vault encryption key access
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptType: InlineScript
+        Inline: |
+          $keyVault = Get-AzKeyVault -ResourceGroupName $(ResourceGroup) -VaultName $(KeyVaultName)
+          
+          $existing = Get-AzRoleAssignment -ObjectId $(PrincipalId) -RoleDefinitionName "Key Vault Crypto User" -Scope $($keyVault.ResourceId)
+
+          if($null -eq $existing){
+            New-AzRoleAssignment -ObjectId $(PrincipalId) -RoleDefinitionName "Key Vault Crypto User" -Scope $($keyVault.ResourceId)
+          }else{
+            Write-Host "Role assignment already exists"
+          }
+       
+    - task: AzurePowerShell@5
+      name: KeyExists
+      displayName: Check for app config CMK in $(KeyVaultName)
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/KeyExists.ps1
+        ScriptArguments: >
+          -keyVaultName $(KeyVaultName)
+          -KeyName $(EncryptionKeyName)
+          -VariableName KeyFound
+    - task: AzurePowerShell@5
+      name: AddKey
+      displayName: Add $(ContainerRegistryName) encryption key to $(KeyVaultName)
+      condition: and(succeeded(), eq(variables['KeyFound'], 'false'))
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/CreateKey.ps1
+        ScriptArguments: >
+          -KeyVaultName $(KeyVaultName)
+          -KeyName $(EncryptionKeyName)
+          -VaildForYears $(EncryptionKeyValidatityYears)
+  - task: AzureCLI@2
+    name:  AppConfiguration
+    displayName: ${{ parameters.stage.TaskDisplayName }} container registry
+    condition: succeeded()
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/Containers/CreateContainerRegistry.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -registryName $(ContainerRegistryName)
+          -userIdentity $(UserIdentity)
+          -vnetName $(VnetName)
+          -subnetName $(SubnetName)
+          -vnetResourceGroup $(VnetResourceGroup)
+          -keyVaultName $(KeyVaultName)
+          -encryptionKeyName $(EncryptionKeyName)
+          -logWorkspaceName $(LogWorkspace)
+          -location '$(Location)'
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/Containers/
+
+  - ${{ if eq(parameters.stage.IsDeployment, true) }}:
+    - task: AzurePowerShell@5
+      name: AssignAccess 
+      displayName: Assign DevOps Service Principal Push and Pull Roles
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptType: InlineScript
+        Inline: |
+          $containerRegistry = Get-AzContainerRegistry -Name $(ContainerRegistryName) -ResourceGroupName $(ResourceGroup) 
+          
+          $existing = Get-AzRoleAssignment -ObjectId $(ServicePrincipalId) -RoleDefinitionName "AcrPush" -Scope $($containerRegistry.Id)
+
+          if($null -eq $existing){
+            New-AzRoleAssignment -ObjectId $(PrincipalId) -RoleDefinitionName "AcrPush" -Scope $($containerRegistry.Id)
+          }else{
+            Write-Host "Role assignment 'AcrPush' already exists"
+          }
+
+          $existing = Get-AzRoleAssignment -ObjectId $(ServicePrincipalId) -RoleDefinitionName "AcrPull" -Scope $($containerRegistry.Id)
+
+          if($null -eq $existing){
+            New-AzRoleAssignment -ObjectId $(PrincipalId) -RoleDefinitionName "AcrPull" -Scope $($containerRegistry.Id)
+          }else{
+            Write-Host "Role assignment 'AcrPull' already exists"
+          }

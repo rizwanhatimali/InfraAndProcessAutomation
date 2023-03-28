@@ -1,0 +1,26 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - task: AzureCLI@2
+    name:  AppServicePlan
+    displayName: ${{ parameters.stage.TaskDisplayName }} App Service Plan
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppService/CreateAppServicePlan.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -appPlanName $(AppPlanName)
+          -sku '$(Build.SourcesDirectory)/$(Build.Repository.Name)/${{ parameters.stage.variables.extra.Sku }}'
+          -kind $(OS)
+          -location '$(Location)'
+          -zoneRedundant $(ZoneRedundant)
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppService/

@@ -1,0 +1,26 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - task: AzureCLI@2
+    name:  EventHubNamespace
+    displayName: '${{ parameters.stage.TaskDisplayName }} Event hub namespace: $(NamespaceName)'
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/EventHub/CreateNamespace.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -namespaceName $(NamespaceName)
+          -retentionPeriod $(RetentionPeriod)
+          -maximumThroughputUnits $(MaximumThroughputUnits)
+          -logWorkspaceName $(LogWorkspace)
+          -location '$(Location)'
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/EventHub/

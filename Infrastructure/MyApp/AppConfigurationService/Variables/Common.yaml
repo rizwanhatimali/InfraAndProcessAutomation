@@ -1,0 +1,7 @@
+variables:
+  KeyVaultName: $(CdrKeyVaultName)
+  RetentionPeriod : 7
+  VnetName: $(ComponetVnetName)
+  SubnetName: $(ComponetSubnetName)
+  VnetResourceGroup: $(ComponetVnetResourceGroup)
+  AppConfigServiceSku: standard

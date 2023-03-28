@@ -1,0 +1,6 @@
+trigger: none
+
+extends:
+  template: ../BaseTemplates/base-ci-pipeline.yaml
+  parameters:
+    Type: PublicApplicationGateway

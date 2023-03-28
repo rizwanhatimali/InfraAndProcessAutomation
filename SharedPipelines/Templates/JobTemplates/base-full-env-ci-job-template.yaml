@@ -1,0 +1,27 @@
+parameters:
+  - name: Config
+    type: object
+
+jobs:
+  - template: base-ci-job-template.yaml
+    parameters:
+      stage:
+        JobName: ${{parameters.Config.Type}}
+        TaskDisplayName: Validate
+        ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+        AgentPool: ${{ parameters.Config.AgentPool }}
+        BaseTemplate: ${{ parameters.Config.BaseTemplate }}
+        Command: validate
+        Environment:
+          Name: Dev
+          Variables: ${{ parameters.Config.EnvironmentalVariables }}
+        repositories:
+          SharedRepository: ${{ parameters.Config.SharedRepository }}
+          CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}
+        variables:
+          global: ${{ parameters.Config.GlobalVariables }}
+          common: ${{ parameters.Config.CommonVariables }}
+          local: ${{ parameters.Config.Variables }}
+          extra: ${{ parameters.Config.Extra }}
+        IsDeployment: false
+      dependsOn: ${{ parameters.Config.DependsOn }}

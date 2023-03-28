@@ -1,0 +1,70 @@
+parameters: 
+  - name: azure
+    type: object
+  - name: sonar
+    type: object
+steps:
+  - task: AzurePowerShell@5
+    displayName: "Set Variables"
+    inputs:
+      azureSubscription: ${{ parameters.azure.serviceConnection }}
+      ScriptType: 'InlineScript'
+      Inline: |
+          Write-Host "Is PR: ${{ parameters.sonar.isPr}}"
+          $isPr = "${{ parameters.sonar.isPr}}"
+          if ( $isPr -eq "True" ){
+            Write-Host "This is a pull request"
+            Write-Host "Pull request Id: $(System.PullRequest.PullRequestId)"
+            Write-Host "##vso[task.setvariable variable=qualityGateType;]PullRequest"
+            Write-Host "##vso[task.setvariable variable=qualityGateId;]$(System.PullRequest.PullRequestId)"
+          }else{
+            $fullBranch = "$(Build.SourceBranch)"
+            $branchName = $fullBranch.Replace("refs/heads/","")
+            Write-Host "This is a branch"
+            Write-Host "Branch name: $branchName"
+            Write-Host "##vso[task.setvariable variable=qualityGateType;]Branch"
+            Write-Host "##vso[task.setvariable variable=qualityGateId;]$branchName"
+          }
+      azurePowerShellVersion: 'LatestVersion'
+  - task: AzurePowerShell@5
+    displayName: 'Check Sonarqube Quality Gate'
+    inputs:
+      azureSubscription: ${{ parameters.azure.serviceConnection }}
+      ScriptType: 'InlineScript'
+      Inline: |
+          $sonarToken '${{ parameters.sonar.token }}' 
+          $sonarUrl '${{ parameters.sonar.url }}' 
+          $projectKey ${{ parameters.sonar.projectKey }} 
+          $type $(qualityGateType) 
+          $id '$(qualityGateId)
+          $token = [System.Text.Encoding]::UTF8.GetBytes($sonarToken + ":")
+          $base64 = [System.Convert]::ToBase64String($token)
+          
+          $basicAuth = [string]::Format("Basic {0}", $base64)
+          $headers = @{ Authorization = $basicAuth }
+          
+          $targetUrl = "$($sonarUrl)/api/qualitygates/project_status?projectKey=$($projectKey)"
+          
+          if($type -eq "Branch"){
+              $branch = [System.Web.HttpUtility]::UrlEncode($id)
+              $targetUrl += "&branch=$branch"
+          }else{
+              $targetUrl += "&pullRequest=$id"
+          }
+          
+          Write-Host "Target URL: $targetUrl"
+          
+          $result = Invoke-RestMethod -Method Get -Uri $targetUrl  -Headers $headers
+          
+          
+          Write-Host "Project Status: $($result.projectStatus.status)"
+          
+          if ($result.projectStatus.status -eq "OK") {
+            Write-Host "Quality Gate Succeeded"
+          }
+          else{
+            Write-Error "Quality gate failed"
+            Write-Host "##vso[task.logissue type=error;]Quality gate failed"
+            Write-Host "##vso[task.complete result=Failed;]Quality gate failed"
+          }
+      azurePowerShellVersion: 'LatestVersion'  

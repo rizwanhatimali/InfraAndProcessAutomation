@@ -1,0 +1,6 @@
+variables:
+  KeyVaultName: $(CdrKeyVaultName)
+  RetentionPeriod : 30
+  VnetName: $(ComponetVnetName)
+  SubnetName: $(ComponetSubnetName)
+  VnetResourceGroup: $(ComponetVnetResourceGroup)

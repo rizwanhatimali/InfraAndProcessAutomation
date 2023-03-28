@@ -1,0 +1,53 @@
+resources:
+  repositories:
+    - repository: SharedPipelines
+      type: git
+      name: Middleware/SharedPipelines
+    - repository: Common-Infrastructure
+      type: git
+      name: Middleware/Common-Infrastructure
+
+trigger: none
+
+stages:
+  - stage: Validation
+    displayName: Validate environment
+    jobs:
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: LogAnalyticsWorkspace
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: KeyVault
+          DependsOn: [
+            'LogAnalyticsWorkspace'
+          ]
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: ApplicationInsights
+          DependsOn: [
+            'KeyVault'
+          ]
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: AppServicePlan
+          Extra:
+            Sku: src/CDR-Engine-Integration/AppServicePlan/Variables/sku.json
+          DependsOn: [
+            'ApplicationInsights'
+          ]
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: AppConfigurationService
+          DependsOn: [
+            'AppServicePlan'
+          ]
+      - template: BaseTemplates/base-ci-job-pipeline.yaml
+        parameters:
+          Type: EventHubNamespace
+          DependsOn: [
+            'AppConfigurationService'
+          ]
+          
+      
+    

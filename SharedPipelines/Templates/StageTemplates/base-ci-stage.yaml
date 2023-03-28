@@ -1,0 +1,29 @@
+parameters:
+  - name: Config
+    type: object
+
+stages:
+  - stage: ValidateBicep
+    displayName: Validate the bicep script
+    jobs: 
+      - template: ../JobTemplates/base-ci-job-template.yaml
+        parameters:
+          stage:
+            JobName: Validate
+            TaskDisplayName: Validate
+            ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+            AgentPool: ${{ parameters.Config.AgentPool }}
+            BaseTemplate: ${{ parameters.Config.BaseTemplate }}
+            Command: validate
+            Environment:
+              Name: Dev
+              Variables: ${{ parameters.Config.EnvironmentalVariables }}
+            repositories:
+              SharedRepository: ${{ parameters.Config.SharedRepository }}
+              CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}
+            variables:
+              global: ${{ parameters.Config.GlobalVariables }}
+              common: ${{ parameters.Config.CommonVariables }}
+              local: ${{ parameters.Config.Variables }}
+              extra: ${{ parameters.Config.Extra }}
+            IsDeployment: false

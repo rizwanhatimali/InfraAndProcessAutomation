@@ -1,0 +1,24 @@
+parameters:
+  - name: stage
+    type: object
+  - name: dependsOn
+    type: object
+    default: []
+
+jobs:
+  - job: '${{ parameters.stage.JobName }}'
+    displayName: ${{ parameters.stage.DisplayName }}
+    dependsOn: ${{ parameters.dependsOn }}
+    workspace:
+      clean: all
+    pool:
+      name: ${{ parameters.stage.AgentPool }}
+    variables: 
+      - template: ${{ parameters.stage.variables.global }}
+      - template: ${{ parameters.stage.variables.common }}
+      - template: ${{ parameters.stage.variables.local }}
+      - template: ${{ parameters.stage.Environment.Variables }}
+    steps:
+      - template: ${{ parameters.stage.BaseTemplate }}
+        parameters:
+          stage: ${{ parameters.stage }}

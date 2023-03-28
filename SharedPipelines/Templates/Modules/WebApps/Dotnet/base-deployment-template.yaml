@@ -1,0 +1,135 @@
+trigger: none
+
+parameters:
+  - name: environments
+    type: object
+    default: []
+  - name: workingDirectory
+    type: string
+  - name: projectFolder
+    type: string
+  - name: projectFile
+    type: string
+  - name: AzureServiceConnection
+    type: string
+    default: eMobility Devops Service Principal
+  - name: SharedRepository
+    type: string
+    default: SharedPipelines
+  - name: SonarQube
+    type: object
+  - name: TestsEnabled
+    type: boolean
+    default: true
+  - name: ApplicationType
+    type: string
+    default: Function
+    values:
+      - Function
+      - AppService
+
+variables:
+  - name: WorkingDirectory
+    value: '$(Build.SourcesDirectory)/${{ parameters.workingDirectory }}'
+  - name: SharedScriptsDirectory
+    value: '$(Build.SourcesDirectory)/${{ parameters.SharedRepository }}/Scripts'
+  - name: isPr
+    value: ${{ eq(variables['Build.Reason'], 'PullRequest') }}
+
+stages:
+  - stage: build
+    displayName: Build app and create packages
+    jobs:
+      - job: build
+        displayName: Perform Build
+        steps:
+          - template: "StepTemplates/SharedBuildSteps.yaml"
+            parameters: 
+              SonarQube: ${{ parameters.SonarQube }}
+              AzureServiceConnection: ${{ parameters.AzureServiceConnection }}
+              SonarqubeToken: $(SonarqubeToken)
+              isPr: ${{ eq(variables['Build.Reason'], 'PullRequest') }}
+              WorkingDirectory: $(WorkingDirectory)
+              SharedRepository : ${{ parameters.SharedRepository }}
+              TestsEnabled: ${{ parameters.TestsEnabled }}
+          - task: DotNetCoreCLI@2
+            displayName: "Publish Build"
+            inputs:
+              command: publish
+              arguments: '--configuration Release --output $(System.DefaultWorkingDirectory)/publish_output'
+              projects: '$(WorkingDirectory)/**/${{ parameters.projectFile }}'
+              publishWebProjects: false
+              modifyOutputPath: false
+              zipAfterPublish: false
+            condition: succeeded()
+          - task: ArchiveFiles@2
+            displayName: "Package files build artifact"
+            inputs:
+              rootFolderOrFile: "$(System.DefaultWorkingDirectory)/publish_output"
+              includeRootFolder: false
+              archiveFile: "$(Build.ArtifactStagingDirectory)/app/build$(Build.BuildId).zip"
+            condition: succeeded()
+          - task: PublishBuildArtifacts@1
+            displayName: Publish artifact
+            inputs:
+              PathtoPublish: '$(Build.ArtifactStagingDirectory)/app/build$(Build.BuildId).zip'
+              artifactName: app
+          - task: CopyFiles@2
+            displayName: Copy shared scripts
+            inputs:
+              SourceFolder: $(SharedScriptsDirectory)
+              Contents: '**'
+              TargetFolder: '$(Build.ArtifactStagingDirectory)/resources/scripts'
+          - publish: $(Build.ArtifactStagingDirectory)/resources
+            displayName: Publish resources
+            artifact: resources
+  - ${{ each env in parameters.environments }}: 
+    - stage: ${{env.name}}
+      displayName: ${{ env.displayName }}
+      dependsOn: ${{ env.dependsOn }}
+      condition: succeeded()  
+      jobs:
+        - deployment: DeployAppJob
+          displayName: "Deploy App"
+          condition: succeeded()
+          environment: ${{ env.environment }}
+          variables:
+            - name: isFunctionApp
+              value: ${{ eq(parameters.ApplicationType, 'Function') }}
+            - name: isAppService
+              value: ${{ eq(parameters.ApplicationType, 'AppService') }}
+          strategy:
+            runOnce:
+              deploy:
+                steps:
+                  - download: current
+                    artifact: app
+                    displayName: Download app zip package
+                  - download: current
+                    artifact: resources
+                    displayName: Download deployment resources
+                  
+                  - ${{ if eq(variables['isFunctionApp'], true) }}:
+                    - task: AzureFunctionApp@1
+                      displayName: 'Deploy Azure Function App'
+                      inputs:
+                        azureSubscription:  ${{ parameters.AzureServiceConnection  }}
+                        appType: 'functionApp'
+                        appName: ${{ env.AppName }}
+                        deployToSlotOrASE: true
+                        resourceGroupName: ${{ env.ResourceGroup }}
+                        package: '$(Pipeline.Workspace)/app/*.zip'
+                        deploymentMethod: 'auto'
+                  
+                  - ${{ if eq(variables['isAppService'], true) }}:
+                    - task: AzureWebApp@1
+                      displayName: 'Deploy ${{ env.AppName }} App Service'
+                      inputs:
+                        azureSubscription:  ${{ parameters.AzureServiceConnection  }}
+                        appType: 'webApp'
+                        appName: ${{ env.AppName }}
+                        resourceGroupName: ${{ env.ResourceGroup }}
+                        deployToSlotOrASE: true
+                        package: '$(Pipeline.Workspace)/app/*.zip'
+                        deploymentMethod: 'auto'
+                  

@@ -1,0 +1,7 @@
+variables:
+  BaseName: AGW-eMobility
+  GatewayName: $(BaseName)-$(Env)
+  FirewallPolicyName: FW-Policy-$(BaseName)
+  VnetName: VNET-EMobility-POC-DEV
+  SubnetName: subnet-public
+  VnetResourceGroup: RG-EMobility-POC-DEV

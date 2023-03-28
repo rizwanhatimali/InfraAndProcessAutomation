@@ -1,0 +1,64 @@
+parameters:
+  - name: stage
+    type: object
+  - name: IsDeployment
+    type: boolean
+    default: false
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - task: AzureCLI@2
+    name:  AppInsights
+    displayName: ${{ parameters.stage.TaskDisplayName }} Application Insights instance
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppInsights/CreateAppInsights.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -applicationInsightsName $(ApplicationInsightsName)
+          -logWorkspaceName $(LogWorkspace)
+          -location '$(Location)'
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppInsights/
+  - ${{ if eq(parameters.IsDeployment, true) }}: 
+    - task: AzurePowerShell@5
+      name: SecretExists
+      displayName: Check to see if the app insights connection string is already in the key vault
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/DoesSecretExist.ps1
+        ScriptArguments: >
+          -keyVaultName $(KeyVaultName)
+          -SecretName APPINSIGHTS-CONNECTIONSTRING
+          -VariableName SecretFound
+    - task: AzurePowerShell@5
+      name: GetConnectionString
+      displayName: Get the connection string from $(ApplicationInsightsName)
+      condition: and(succeeded(), eq(variables['SecretFound'], 'false'))
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/GetAppinsightsConnectionString.ps1
+        ScriptArguments: >
+          -ApplicationInsightsName $(ApplicationInsightsName)
+          -ResourceGroup $(ResourceGroup)
+          -VariableName ConnectionString
+    - task: AzurePowerShell@5
+      name: AddSecret
+      displayName: Add $(ApplicationInsightsName) connection string $(KeyVaultName) as a secret
+      condition: and(succeeded(), eq(variables['SecretFound'], 'false'))
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/CreateSecret.ps1
+        ScriptArguments: >
+          -KeyVaultName $(KeyVaultName)
+          -SecretName APPINSIGHTS-CONNECTIONSTRING
+          -Value '$(ConnectionString)'
+          -VaildForYears 3

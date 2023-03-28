@@ -1,0 +1,34 @@
+resources:
+  repositories:
+    - repository: SharedPipelines
+      type: git
+      name: Middleware/SharedPipelines
+
+trigger:
+  branches:
+    include:
+      - main
+  paths:
+    include:
+      - src/eMobility.PocAPI/eMobility.PocAPI
+      - src/eMobility.PocAPI/eMobility.PocD365Integration
+
+extends:
+  template: Templates/Modules/WebApps/DotNet/base-deployment-template.yaml@SharedPipelines
+  parameters:
+    environments:
+      - environment: POC
+        name: deploy_poc_environment
+        displayName: Deploy to the POC Environment
+        dependsOn: ['build']
+        isProduction: false
+        AppName: eMobility-API
+        ResourceGroup: rg-emobility-poc-dev
+    workingDirectory: 'POC-API/src/eMobility.PocAPI'
+    projectFolder: eMobility.PocAPI
+    projectFile: eMobility.PocAPI.csproj
+    ApplicationType: AppService
+    SonarQube:
+      Enabled: false
+      QualityGateEnabled: false
+      ProjectKey: eMobility.Poc-API

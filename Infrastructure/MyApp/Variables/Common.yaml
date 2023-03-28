@@ -1,0 +1,8 @@
+variables:
+  ResourceGroup: RG-EMobility-$(Env)
+  LogWorkspace: Log-eMobility-Middleware-$(Env)
+  CdrKeyVaultName: KV-eMobility-CDR-$(Env)
+  ComponetVnetName: VNET-EMobility-POC-DEV
+  ComponetSubnetName: subnet-workloads
+  ComponetVnetResourceGroup: RG-EMobility-POC-DEV
+  AppConfigServiceName: APPI-eMobility-CDR-$(Env)

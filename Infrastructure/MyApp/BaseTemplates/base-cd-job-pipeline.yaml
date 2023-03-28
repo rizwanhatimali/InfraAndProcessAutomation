@@ -1,0 +1,28 @@
+parameters:
+  - name: Type
+    type: string
+  - name: Extra
+    type: object
+    default: {}
+  - name: DependsOn
+    type: object
+    default: []
+  - name: Environment
+    type: object
+
+jobs:
+  - template: Templates/JobTemplates/base-full-env-cd-job-template.yaml@SharedPipelines
+    parameters:
+      Config:
+        SharedRepository: SharedPipelines
+        CommonInfrastructure: Common-Infrastructure
+        ServiceConnection: eMobility Devops Service Principal
+        GlobalVariables: src/GlobalVariables.yaml@self
+        CommonVariables: src/CDR-Engine-Integration/Variables/Common.yaml@self
+        Variables: src/CDR-Engine-Integration/${{ parameters.Type }}/Variables/Common.yaml@self
+        BaseTemplate: /Templates/Modules/${{ parameters.Type}}/deployment-group-steps.yaml@SharedPipelines
+        AgentPool: Cdr Build Agents
+        Extra: ${{ parameters.Extra }}
+        DependsOn: ${{ parameters.DependsOn }}
+        Type: ${{ parameters.Type }}
+      Environment: ${{ parameters.Environment }}

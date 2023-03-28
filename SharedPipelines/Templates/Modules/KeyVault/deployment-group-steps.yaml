@@ -1,0 +1,43 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - task: AzureCLI@2
+    name:  KeyVault
+    displayName: ${{ parameters.stage.TaskDisplayName }} Key Vault
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/KeyVault/CreateKeyVault.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -keyVaultName $(KeyVaultName)
+          -vnetName $(VnetName)
+          -subnetName $(SubnetName)
+          -vnetResourceGroup $(VnetResourceGroup)
+          -retentionPeriod $(RetentionPeriod)
+          -logWorkspaceId $(LogWorkspace)
+          -location '$(Location)'
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/KeyVault/
+  - task: AzurePowerShell@5
+    name: AssignKeyVaultAccess 
+    displayName: Grant deployment service access to the key vault
+    condition: succeeded()
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      azurePowerShellVersion: LatestVersion
+      pwsh: true
+      ScriptType: FilePath
+      ScriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/KeyVault/AddRoleAssignments.ps1'
+      ScriptArguments: >
+        -vaultName $(KeyVaultName)
+        -resourceGroup $(ResourceGroup)
+        -servicePrincipal $(ServicePrincipalId)
+        -roles 'Key Vault Secrets Officer','Key Vault Certificates Officer','Key Vault Crypto Officer'

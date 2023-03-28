@@ -1,0 +1,6 @@
+trigger: none
+
+extends:
+  template: ../BaseTemplates/base-deployment-pipeline.yaml
+  parameters:
+    Type: ContainerRegistry

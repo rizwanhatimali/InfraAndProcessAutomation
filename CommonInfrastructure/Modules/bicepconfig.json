@@ -1,0 +1,10 @@
+{
+    "moduleAliases": {
+        "br": {
+          "Modules": {
+              "registry": "cranchorservices.azurecr.io",
+              "modulePath": "bicep/modules"
+          }
+        }
+    }
+  }

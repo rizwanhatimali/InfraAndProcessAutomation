@@ -1,0 +1,10 @@
+trigger: none
+
+extends:
+  template: ../../../SharedPipelines/Templates/Modules/WebApps/DotNet/base-ci-template.yaml
+  parameters:
+    SourceFolder: 'Apps/SampleFunctionApp'
+    SonarQube:
+      Enabled: false
+      QualityGateEnabled: false
+      ProjectKey: Apps.SampleFunctionApp

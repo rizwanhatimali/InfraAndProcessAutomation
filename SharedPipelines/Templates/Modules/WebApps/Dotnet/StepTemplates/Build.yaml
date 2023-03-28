@@ -1,0 +1,16 @@
+parameters:
+  - name: WorkingDirectory
+    type: string
+  - name: buildConfiguration
+    type: string
+    default: Release
+
+steps:
+  - script: |
+      dotnet restore
+    displayName: 'Restore dependencies'
+    workingDirectory: ${{ parameters.WorkingDirectory}}
+  - script: |
+      dotnet build --configuration ${{ parameters.buildConfiguration}} --no-restore
+    displayName: 'Build Projects'
+    workingDirectory: ${{ parameters.WorkingDirectory}}

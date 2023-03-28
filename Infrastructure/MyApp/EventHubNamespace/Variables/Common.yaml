@@ -1,0 +1,4 @@
+variables:
+  NamespaceName: EVHNS-EMobility-CDR-$(Env)
+  RetentionPeriod : 30
+  MaximumThroughputUnits: 5

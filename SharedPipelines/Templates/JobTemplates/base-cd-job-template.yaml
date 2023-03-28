@@ -1,0 +1,28 @@
+parameters:
+  - name: stage
+    type: object
+  - name: dependsOn
+    type: object
+    default: []
+
+jobs:
+  - deployment: ${{ parameters.stage.JobName }}
+    displayName: "Deploy resource"
+    dependsOn: ${{ parameters.dependsOn }}
+    workspace:
+      clean: all
+    pool:
+      name: ${{ parameters.stage.AgentPool }}
+    environment: ${{ parameters.stage.Environment.Name }}
+    variables: 
+      - template: ${{ parameters.stage.variables.global }}
+      - template: ${{ parameters.stage.variables.common }}
+      - template: ${{ parameters.stage.variables.local }}
+      - template: ${{ parameters.stage.Environment.Variables }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - template: ${{ parameters.stage.BaseTemplate }}
+              parameters:
+                stage: ${{ parameters.stage }}

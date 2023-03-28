@@ -1,0 +1,10 @@
+variables:
+  ContainerRegistryName: CReMobilityCDR
+  EncryptionKeyName: CReMobilityCDR-EcryptionKey
+  EncryptionKeyValidatityYears: 3
+  UserIdentity: eMobility-Container-Registry
+  KeyVaultName: $(CdrKeyVaultName)
+  VnetName: $(ComponetVnetName)
+  SubnetName: $(ComponetSubnetName)
+  VnetResourceGroup: $(ComponetVnetResourceGroup)
+  

@@ -1,0 +1,71 @@
+resources:
+  repositories:
+    - repository: SharedPipelines
+      type: git
+      name: Middleware/SharedPipelines
+    - repository: Common-Infrastructure
+      type: git
+      name: Middleware/Common-Infrastructure
+
+parameters:
+  - name: Environments
+    type: object
+    default:
+      - Name: Dev
+        Variables: src/CDR-Engine-Integration/Variables/Env/Dev.yaml@self
+      - Name: Qas
+        Variables: src/CDR-Engine-Integration/Variables/Env/Qas.yaml@self
+      - Name: Run
+        Variables: src/CDR-Engine-Integration/Variables/Env/Run.yaml@self
+
+trigger: none
+
+stages:
+  - ${{ each env in parameters.Environments }}: 
+    - stage: DeployTo${{ env.Name }}
+      displayName: Deploy to ${{ env.Name }} environment
+      jobs:
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: LogAnalyticsWorkspace
+            Environment: ${{ env }}
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: KeyVault
+            Environment: ${{ env }}
+            DependsOn: [
+              'LogAnalyticsWorkspace'
+            ]
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: ApplicationInsights
+            Environment: ${{ env }}
+            DependsOn: [
+              'KeyVault'
+            ]
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: AppServicePlan
+            Environment: ${{ env }}
+            Extra:
+              Sku: src/CDR-Engine-Integration/AppServicePlan/Variables/sku.json
+            DependsOn: [
+              'ApplicationInsights'
+            ]
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: AppConfigurationService
+            Environment: ${{ env }}
+            DependsOn: [
+              'AppServicePlan'
+            ]
+        - template: BaseTemplates/base-cd-job-pipeline.yaml
+          parameters:
+            Type: EventHubNamespace
+            Environment: ${{ env }}
+            DependsOn: [
+              'AppConfigurationService'
+            ]
+          
+      
+    

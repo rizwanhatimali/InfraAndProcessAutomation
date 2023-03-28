@@ -1,0 +1,64 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.stage.repositories.SharedRepository }}
+  - checkout: ${{ parameters.stage.repositories.CommonInfrastructure }}
+  - task: AzureCLI@2
+    name:  AppConfiguration
+    displayName: ${{ parameters.stage.TaskDisplayName }} app configuration service
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      scriptType: 'pscore'
+      scriptLocation: 'scriptPath'
+      scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppConfiguration/CreateAppConfigurationService.ps1'
+      arguments: > # Use this to avoid newline characters in multiline string
+          -subscription $(Subscription)
+          -resourceGroup '$(ResourceGroup)'
+          -command ${{ parameters.stage.Command }}
+          -appConfigServiceName $(AppConfigServiceName)
+          -appConfigServiceSku $(AppConfigServiceSku)
+          -retentionPeriod $(RetentionPeriod)
+          -vnetName $(VnetName)
+          -subnetName $(SubnetName)
+          -vnetResourceGroup $(VnetResourceGroup)
+          -keyVaultName $(KeyVaultName)
+          -logWorkspaceName $(LogWorkspace)
+          -location '$(Location)'
+      workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/AppConfiguration/
+  - ${{ if eq(parameters.stage.IsDeployment, true) }}: 
+    - task: AzurePowerShell@5
+      name: KeyExists
+      displayName: Check for app config CMK in $(KeyVaultName)
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/KeyExists.ps1
+        ScriptArguments: >
+          -keyVaultName $(KeyVaultName)
+          -KeyName $(AppConfigServiceName)-EncryptionKey
+          -VariableName KeyFound
+    - task: AzurePowerShell@5
+      name: AddSecret
+      displayName: Add $(AppConfigServiceName) encryption key to $(KeyVaultName)
+      condition: and(succeeded(), eq(variables['KeyFound'], 'false'))
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/CreateKey.ps1
+        ScriptArguments: >
+          -KeyVaultName $(KeyVaultName)
+          -KeyName $(AppConfigServiceName)-EncryptionKey
+          -VaildForYears 3
+    - task: AzureCLI@2
+      name: SetEncryptionMode
+      displayName: Set encryption to CMK
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        scriptType: pscore
+        scriptLocation: inlineScript
+        inlineScript: |
+            az appconfig update -g $(ResourceGroup) -n $(AppConfigServiceName) --encryption-key-name $(AppConfigServiceName)-EncryptionKey --encryption-key-vault https://$(KeyVaultName).vault.azure.net/

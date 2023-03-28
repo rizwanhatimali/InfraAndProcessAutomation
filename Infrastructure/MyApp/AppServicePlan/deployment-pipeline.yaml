@@ -1,0 +1,8 @@
+trigger: none
+
+extends:
+  template: ../BaseTemplates/base-deployment-pipeline.yaml
+  parameters:
+    Type: AppServicePlan
+    Extra:
+      Sku: src/CDR-Engine-Integration/AppServicePlan/Variables/sku.json

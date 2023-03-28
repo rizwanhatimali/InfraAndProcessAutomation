@@ -1,0 +1,28 @@
+parameters:
+  - name: Config
+    type: object
+  - name: Environment
+    type: object
+
+jobs:
+  - template: ../JobTemplates/base-cd-job-template.yaml
+    parameters:
+      stage:
+        DisplayName: Deploy to ${{ parameters.Environment.Name }}
+        JobName: ${{parameters.Config.Type}}
+        TaskDisplayName: Deploy
+        ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+        AgentPool: ${{ parameters.Config.AgentPool }}
+        BaseTemplate: ${{ parameters.Config.BaseTemplate }}
+        Command: create
+        Environment: ${{ parameters.Environment }}
+        repositories:
+          SharedRepository: ${{ parameters.Config.SharedRepository }}
+          CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}
+        variables:
+          global: ${{ parameters.Config.GlobalVariables }}
+          common: ${{ parameters.Config.CommonVariables }}
+          local: ${{ parameters.Config.Variables }}
+          extra: ${{ parameters.Config.Extra }}
+        IsDeployment: true
+      dependsOn: ${{ parameters.Config.DependsOn }}

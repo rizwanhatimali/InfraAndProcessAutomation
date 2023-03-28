@@ -1,0 +1,4 @@
+variables:
+  AppPlanName: Plan-eMobility-CDR-$(Env)
+  OS: linux
+  ZoneRedundant: false

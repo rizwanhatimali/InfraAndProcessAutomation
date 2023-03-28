@@ -1,0 +1,3 @@
+variables:
+  ApplicationInsightsName: APPI-eMobility-CDR-$(Env)
+  KeyVaultName: $(CdrKeyVaultName)

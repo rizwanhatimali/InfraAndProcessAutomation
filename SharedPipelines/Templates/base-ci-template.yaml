@@ -1,0 +1,9 @@
+parameters:
+  - name: Config
+    type: object
+
+stages:
+  - template: StageTemplates/base-ci-stage.yaml
+    parameters:
+      Config: ${{ parameters.Config }}
+          

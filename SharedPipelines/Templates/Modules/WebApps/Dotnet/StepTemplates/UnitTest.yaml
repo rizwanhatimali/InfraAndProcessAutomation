@@ -1,0 +1,28 @@
+parameters:
+  - name: WorkingDirectory
+    type: string
+  - name: buildConfiguration
+    type: string
+    default: Release
+
+steps:
+  - task: DotNetCoreCLI@2
+    inputs:
+      command: 'test'
+      projects: '${{ parameters.WorkingDirectory }}/**/*.Test.csproj'
+      arguments: '--no-restore --configuration ${{ parameters.buildConfiguration }} --no-build --collect "XPlat Code Coverage"'
+    displayName: 'Run Unit Tests'
+    condition: succeeded()
+  - script: |
+      dotnet tool install --global dotnet-reportgenerator-globaltool --version 4.5.8  
+    displayName: 'Install ReportGenerator tool'
+  - script: |
+      reportgenerator -reports:$(Agent.TempDirectory)/**/coverage.cobertura.xml -targetdir:${{ parameters.WorkingDirectory }}/coverlet/reports -reporttypes:"Cobertura"
+      
+      reportgenerator "-reports:$(Agent.TempDirectory)/**/coverage.cobertura.xml" "-targetdir:${{ parameters.WorkingDirectory }}/coverlet/reports" "-reporttypes:SonarQube"
+    displayName: 'Create reports'
+  - task: PublishCodeCoverageResults@1
+    displayName: 'Publish code coverage report'
+    inputs:
+      codeCoverageTool: Cobertura
+      summaryFileLocation: '${{ parameters.WorkingDirectory }}/coverlet/reports/Cobertura.xml'
