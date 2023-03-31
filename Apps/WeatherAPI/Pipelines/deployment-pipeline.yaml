@@ -18,13 +18,13 @@ extends:
         displayName: Deploy to the Dev Environment
         dependsOn: ['build']
         isProduction: false
-        AppName: sample-function-app
+        AppName: weather-api
         ResourceGroup: rg-infra-process-automation
-    workingDirectory: 'SampleFunctionApp'
-    projectFolder: SampleFunctionApp
-    projectFile: SampleFunctionApp.csproj
-    ApplicationType: Function
+    workingDirectory: 'WeatherAPI'
+    projectFolder: WeatherAPI
+    projectFile: WeatherAPI.csproj
+    ApplicationType: AppService
     SonarQube:
       Enabled: false
       QualityGateEnabled: false
-      ProjectKey: Apps.SampleFunctionApp
+      ProjectKey: Apps.WeatherAPI

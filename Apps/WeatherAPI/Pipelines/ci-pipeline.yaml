@@ -1,0 +1,10 @@
+trigger: none
+
+extends:
+  template: ../../../SharedPipelines/Templates/Modules/WebApps/DotNet/base-ci-template.yaml
+  parameters:
+    SourceFolder: 'Apps/WeatherApi'
+    SonarQube:
+      Enabled: false
+      QualityGateEnabled: false
+      ProjectKey: Apps.WeatherApi
