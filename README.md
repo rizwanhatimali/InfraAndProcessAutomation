@@ -1,4 +1,4 @@
-# To Automate Infrastructure creation, intergration and deployment processes of Application development
+# To Automate Infrastructure creation, continuous intergration and deployment processes of Application development
 
 This repository contains the generic scripts designed to create pipelines to automate below application development activities:
 
