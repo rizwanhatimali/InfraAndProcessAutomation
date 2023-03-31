@@ -1,20 +1,11 @@
-# Introduction 
-TODO: Give a short introduction of your project. Let this section explain the objectives or the motivation behind this project. 
+# Azure Agents
 
-# Getting Started
-TODO: Guide users through getting your code up and running on their own system. In this section you can talk about:
-1.	Installation process
-2.	Software dependencies
-3.	Latest releases
-4.	API references
+To build and deploy your code using Azure Pipelines, you need at least one agent. An agent is a service that runs the jobs defined in your pipeline. The execution of these jobs can occur directly on the agent's host machine or in containers.
 
-# Build and Test
-TODO: Describe and show how to build your code and run the tests. 
+This folder contains scripts to create azure agents which will run as containers in Azure Container Instances and can be used to execute jobs in CICD pipelines.
 
-# Contribute
-TODO: Explain how other users and developers can contribute to make your code better. 
+__Helper__ subfolder which contains shell scripts to be used to install environment, OS and tools.
 
-If you want to learn more about creating good readme files then refer the following [guidelines](https://docs.microsoft.com/en-us/azure/devops/repos/git/create-a-readme?view=azure-devops). You can also seek inspiration from the below readme files:
-- [ASP.NET Core](https://github.com/aspnet/Home)
-- [Visual Studio Code](https://github.com/Microsoft/vscode)
-- [Chakra Core](https://github.com/Microsoft/ChakraCore)
+__Installer__ folder contains a powershell script to install require powershell modules and shell scripts to create the environment to run the application.
+
+The _yaml_ files __azure-agent-pipelines.yml__ and __azure-image-pipelines.yml__ will be used to create CI and CD pipelines to deploy Azure agent into container instances in azure. The services used in container are mentioned in __docker-compose.yml__ file and the commands used to create container image is specified in __DockerFile__.
