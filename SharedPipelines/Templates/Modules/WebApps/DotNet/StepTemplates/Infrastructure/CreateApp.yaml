@@ -1,0 +1,106 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+    - template: /Templates/StepTemplates/Infrastructure/GetLogWorkspaceId.yaml
+      parameters:
+        name: $(LogWorkspace)
+        resourceGroup: $(LogWorkspaceResourceGroup)
+        variableName: "LogWorkspaceId"
+        serviceConnection: ${{ parameters.stage.ServiceConnection }}
+    - task: AzurePowerShell@5
+      name: GetServicePlanId
+      displayName: Get the app service plan id
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        ScriptType: InlineScript
+        pwsh: true
+        Inline: |
+          $servicePlan = Get-AzAppServicePlan -ResourceGroupName $(AppPlanResourceGroup) -Name $(AppPlanName)
+          Write-Host "##vso[task.setvariable variable=AppServicePlanId;]$($servicePlan.Id)"
+    - template: StorageAccount.yaml
+      parameters:
+        stage: ${{ parameters.stage }}
+        LogWorkspaceId: $(LogWorkspaceId)
+    - task: AzureCLI@2
+      name:  App
+      displayName: ${{ parameters.stage.TaskDisplayName }} App
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        scriptType: 'pscore'
+        scriptLocation: 'scriptPath'
+        scriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/WebApps/CreateDotApp.ps1'
+        arguments: > # Use this to avoid newline characters in multiline string
+            -subscription $(Subscription)
+            -resourceGroup '$(ResourceGroup)'
+            -command ${{ parameters.stage.Command }}
+            -storageAccountName $(StorageAccountName)
+            -logWorkspaceId $(LogWorkspaceId)
+            -appName $(AppName)
+            -appServicePlanId $(AppServicePlanId)
+            -environment $(Env)
+            -appVnetName $(VnetName)
+            -appSubnetName $(SubnetName)
+            -appVnetResourceGroup $(VnetResourceGroup)
+            -integrationVnetName $(IntegrationVnetName)
+            -integrationSubnetName $(IntegrationSubnetName)
+            -integrationVnetResourceGroup $(VnetResourceGroup)
+            -authenticationClientId $(AuthenticationClientId)
+            -keyVaultName $(KeyVaultName)
+            -appConfigurationName $(AppConfigurationServiceName)
+            -kind $(Kind)
+            -location '$(Location)'
+        workingDirectory: $(Build.SourcesDirectory)/${{ parameters.stage.repositories.CommonInfrastructure }}/Scripts/WebApps
+    - task: AzurePowerShell@5
+      name: AppIdentity
+      displayName: Get the app principal id
+      condition: succeeded()
+      inputs:
+        azurePowerShellVersion: LatestVersion
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        ScriptType: InlineScript
+        pwsh: true
+        Inline: |
+          $kind = '$(Kind)'
+          if($kind -eq 'functionapp'){
+            $functionApp = Get-AzFunctionApp -Name $(AppName) -ResourceGroupName $(ResourceGroup)
+            Write-Host "##vso[task.setvariable variable=AppIdentity;]$($functionApp.IdentityPrincipalId)"
+          }else{
+            $app = Get-AzWebApp -Name $(AppName) -ResourceGroupName $(ResourceGroup)
+            Write-Host "##vso[task.setvariable variable=AppIdentity;]$($app.Identity.PrincipalId)"
+          }
+          
+    - task: AzurePowerShell@5
+      name: AssignKeyVaultAccess 
+      displayName: Grant application access to the key vault to read keys, secrets and certificates
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        pwsh: true
+        ScriptType: FilePath
+        ScriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/KeyVault/AddRoleAssignments.ps1'
+        ScriptArguments: >
+          -vaultName $(KeyVaultName)
+          -resourceGroup $(KeyVaultResourceGroup)
+          -servicePrincipal $(AppIdentity)
+          -roles 'Key Vault Crypto User','Key Vault Certificates Officer','Key Vault Secrets User'
+
+    - task: AzurePowerShell@5
+      name: AssignConfigurationServiceAccess 
+      displayName: Grant application access to the configuration service
+      condition: succeeded()
+      inputs:
+        azureSubscription: ${{ parameters.stage.ServiceConnection }}
+        azurePowerShellVersion: LatestVersion
+        pwsh: true
+        ScriptType: FilePath
+        ScriptPath: '$(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/AppConfigurationService/AddRoleAssignments.ps1'
+        ScriptArguments: >
+          -configurationServiceName $(AppConfigurationServiceName)
+          -resourceGroup $(AppConfigurationResourceGroup)
+          -servicePrincipal $(AppIdentity)
+          -roles 'App Configuration Data Reader'
+

@@ -3,8 +3,16 @@ trigger: none
 extends:
   template: ../../../SharedPipelines/Templates/Modules/WebApps/DotNet/base-ci-template.yaml
   parameters:
-    SourceFolder: 'Apps/SampleFunctionApp'
+  Config:
+    SourceFolder: 'Apps/SampleFunction'
+    ServiceConnection: 
     SonarQube:
       Enabled: false
       QualityGateEnabled: false
-      ProjectKey: Apps.SampleFunctionApp
+      ProjectKey: Apps.SampleFunction
+      ServiceConnection: SampleFunction Service Principal
+      GlobalVariables: SampleFunction/Pipelines/Variables/GlobalVariables.yaml@self
+      CommonVariables: SampleFunction/Pipelines/Variables/Common.yaml@self
+      EnvironmentalVariables: SampleFunction/Pipelines/Variables/Env/Dev.yaml@self
+      AgentPool: SampleFunction Build Agents
+    IsDeployment: false

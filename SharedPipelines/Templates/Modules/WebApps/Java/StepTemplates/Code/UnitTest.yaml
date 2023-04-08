@@ -1,0 +1,18 @@
+parameters:
+  - name: SourceFolder
+    type: string
+  - name: JavaConfiguration
+    type: string
+
+steps:
+  - task: Maven@4
+    inputs:
+      mavenPomFile: '${{ parameters.SourceFolder }}/pom.xml'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: ${{ parameters.JavaConfiguration.JdkVersion}}
+      jdkArchitectureOption: ${{ parameters.JavaConfiguration.JdkArchitecture}}
+      goals: 'test'
+      publishJUnitResults: true
+      codeCoverageToolOption: Jacoco
+      codeCoverageFailIfEmpty: true
+    displayName: 'Run Unit Tests'

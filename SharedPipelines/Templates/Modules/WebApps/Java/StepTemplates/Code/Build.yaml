@@ -1,0 +1,16 @@
+parameters:
+  - name: SourceFolder
+    type: string
+  - name: JavaConfiguration
+    type: object
+
+steps:
+  - task: Maven@4
+    inputs:
+      mavenPomFile: '${{ parameters.SourceFolder }}/pom.xml'
+      javaHomeOption: 'JDKVersion'
+      jdkVersionOption: ${{ parameters.JavaConfiguration.JdkVersion}}
+      jdkArchitectureOption: ${{ parameters.JavaConfiguration.JdkArchitecture}}
+      goals: 'package'     
+      options: 'package -Dmaven.test.skip'
+    displayName: 'Build Application'

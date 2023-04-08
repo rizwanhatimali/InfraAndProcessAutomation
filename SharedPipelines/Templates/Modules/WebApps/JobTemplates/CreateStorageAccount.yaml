@@ -1,0 +1,34 @@
+parameters:
+  - name: Config
+    type: object
+  - name: env
+    type: object
+  
+
+
+jobs:
+  - deployment: AppStorageAccount
+    displayName: "Create ${{ variables['BaseAppName'] }}"
+    dependsOn: [CheckForExistingApp]
+    condition: and(eq(dependencies.CheckForExistingApp.outputs['AppExists.AppExists'], 'false'), eq(${{parameters.AppKind}}, 'functionapp'))
+    workspace:
+      clean: all
+    pool:
+      name: ${{ parameters.Config.AgentPool }}
+    environment: ${{ env.Name }}
+    strategy:
+      runOnce:
+        deploy:
+          steps:
+            - checkout: ${{ parameters.Config.SharedRepository }}
+            - checkout: ${{ parameters.Config.CommonInfrastructure }}
+            - template: /Templates/Modules/WebApps/DotNet/StepTemplates/Infrastructure/StorageAccount.yaml
+              parameters:
+                stage:
+                  ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+                  AgentPool: ${{ parameters.Config.AgentPool }}
+                  Command: create
+                  Environment: ${{ env }}
+                  repositories:
+                    SharedRepository: ${{ parameters.Config.SharedRepository }}
+                    CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}

@@ -1,0 +1,116 @@
+parameters:
+  - name: Config
+    type: object
+  - name: IsDeployment
+    type: boolean
+
+variables:
+  - group: SonarQube
+  - name: buildConfiguration
+    value: 'Release'
+  - template: ${{ parameters.Config.GlobalVariables }}
+  - template: ${{ parameters.Config.CommonVariables }}
+
+stages:
+  - stage: build
+    displayName: Build app and create packages
+    jobs:
+      - job: Build
+        displayName: Perform a build
+        workspace:
+          clean: all
+        pool:
+          name: ${{ parameters.Config.AgentPool }}
+        steps:
+          - template: StepTemplates/Code/SharedBuildSteps.yaml
+            parameters:
+              AzureServiceConnection: ${{ parameters.Config.ServiceConnection }}
+              SonarqubeToken : $(SonarqubeToken)
+              isPr: ${{ eq(variables['Build.Reason'], 'PullRequest') }}
+              WorkingDirectory: $(Build.SourcesDirectory)/$(Build.Repository.Name)/$(SourceDirectory)
+              TestsEnabled: ${{ eq(variables['TestsEnabled'], 'true') }}
+              repositories:
+                SharedRepository: ${{ parameters.Config.SharedRepository }}
+                CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}
+              SonarQube:
+                Enabled: $(SonarEnabled)
+                ServiceConnection: $(SonarServiceConnection)
+                ProjectKey: $(ProjectKey)
+          - ${{ if eq(parameters.IsDeployment, true) }}:
+            - template: StepTemplates/Code/Package.yaml
+              parameters:
+                projectFile: $(ProjectFile)
+                WorkingDirectory: $(Build.SourcesDirectory)/$(Build.Repository.Name)/$(SourceDirectory)
+                SharedRepository: ${{ parameters.Config.SharedRepository }}
+                CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }} 
+  - ${{ if eq(parameters.IsDeployment, true) }}:
+    - ${{ each env in parameters.Config.Environments }}: 
+      - stage: ${{ env.Name }}
+        displayName:  ${{ env.Name }} environment deployment
+        variables:
+          - template: ${{ env.Variables }}
+        condition: succeeded()  
+        jobs:
+          - template: /Templates/Modules/WebApps/JobTemplates/CheckForExistingApp.yaml
+            parameters:
+              AgentPool: ${{ parameters.Config.AgentPool }}
+              ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+              AppKind: $(Kind)
+              AppName: $(AppName)
+              ResourceGroup: $(ResourceGroup)
+              VariableName: AppExists
+          - deployment: CreateApp_${{env.Name}}
+            displayName: "Create ${{ variables['BaseAppName'] }}"
+            dependsOn: [CheckForExistingApp]
+            condition: eq(dependencies.CheckForExistingApp.outputs['AppExists.AppExists'], 'false')
+            workspace:
+              clean: all
+            pool:
+              name: ${{ parameters.Config.AgentPool }}
+            environment: ${{ env.Name }}
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - checkout: ${{ parameters.Config.SharedRepository }}
+                    - checkout: ${{ parameters.Config.CommonInfrastructure }}
+                    - template: /Templates/Modules/WebApps/DotNet/StepTemplates/Infrastructure/CreateApp.yaml
+                      parameters:
+                        stage:
+                          JobName: Create
+                          DisplayName: Create $(AppName) in ${{ env.Name }}
+                          TaskDisplayName: Deploy
+                          ServiceConnection: ${{ parameters.Config.ServiceConnection }}
+                          AgentPool: ${{ parameters.Config.AgentPool }}
+                          Command: create
+                          Environment: ${{ env }}
+                          repositories:
+                            SharedRepository: ${{ parameters.Config.SharedRepository }}
+                            CommonInfrastructure: ${{ parameters.Config.CommonInfrastructure }}
+          - deployment: DeployApp_${{env.Name}}         
+            displayName: "Deploy ${{ variables['BaseAppName'] }}"
+            dependsOn: 
+              - CheckForExistingApp
+              - CreateApp_${{env.Name}}
+            condition: or( and(succeeded(), eq(dependencies.CheckForExistingApp.outputs['AppExists.AppExists'], 'false')), and(always(), ne(dependencies.CheckForExistingApp.outputs['AppExists.AppExists'], 'false')) )
+            workspace:
+              clean: all
+            pool:
+              name: ${{ parameters.Config.AgentPool }}
+            environment: ${{ env.Name }}
+            strategy:
+              runOnce:
+                deploy:
+                  steps:
+                    - download: current
+                      artifact: app
+                    - task: AzureFunctionApp@1
+                      displayName: 'Deploy Azure App'
+                      inputs:
+                        azureSubscription:  ${{ parameters.Config.ServiceConnection  }}
+                        appType: 'functionApp'
+                        appName: $(AppName)
+                        deployToSlotOrASE: true
+                        resourceGroupName: $(ResourceGroup)
+                        package: '$(Pipeline.Workspace)/app'
+                        deploymentMethod: 'auto'

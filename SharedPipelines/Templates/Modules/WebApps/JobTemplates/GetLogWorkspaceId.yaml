@@ -1,0 +1,19 @@
+parameters:
+  - name: Config
+    type: object
+
+jobs:
+  job: JobGetLogWorkspaceId
+    steps:         
+      - task: AzurePowerShell@5
+        name: GetId
+        displayName: Get Log Workspace Id
+        inputs:
+          azurePowerShellVersion: LatestVersion
+          azureSubscription: ${{ parameters.stage.ServiceConnection }}
+          pwsh: true
+          ScriptType: InlineScript
+          Inline: |
+            $workspace = Get-AzOperationalInsightsWorkspace -Name $(LogWorkspace) -ResourceGroupName $(LogWorkspaceResourceGroup)
+    
+            Write-Host "##vso[task.setvariable variable=LogWorkspaceId;isoutput=true;]$($workspace.ResourceId)"

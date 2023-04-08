@@ -1,0 +1,46 @@
+parameters:
+  - name: AgentPool
+    type: string
+  - name: ServiceConnection
+    type: string
+  - name: AppKind
+    type: string
+  - name: AppName
+    type: string
+  - name: ResourceGroup
+    type: string
+  - name: VariableName
+    type: string
+
+
+jobs:
+  - job: CheckForExistingApp
+    workspace:
+      clean: all
+    pool:
+      name: ${{ parameters.AgentPool }}
+    steps:
+      - checkout: self
+      - task: AzurePowerShell@5
+        name: AppExists
+        displayName: Check to see if app already exists
+        inputs:
+          azurePowerShellVersion: LatestVersion
+          azureSubscription: ${{ parameters.ServiceConnection }}
+          ScriptType: InlineScript
+          pwsh: true
+          Inline: |
+            $kind = "${{ parameters.AppKind }}"
+            if($kind -eq 'functionapp'){
+              $app = Get-AzFunctionApp -Name ${{ parameters.AppName }} -ResourceGroupName ${{ parameters.ResourceGroup }}
+            
+            }else{
+              $app = Get-AzWebApp -Name ${{ parameters.AppName }} -ResourceGroupName ${{ parameters.ResourceGroup }}
+            
+            }
+            $exists = 'false'
+            if($null -ne $app){
+                $exists = 'true'
+            }
+            
+            Write-Host "##vso[task.setvariable variable=${{ parameters.VariableName }};isoutput=true;]$exists"

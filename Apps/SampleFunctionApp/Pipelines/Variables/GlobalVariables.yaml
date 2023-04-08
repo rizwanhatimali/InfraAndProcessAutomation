@@ -1,0 +1,4 @@
+variables:
+  Subscription: <Subscription-GuId>
+  Location: West Europe
+  ServicePrincipalId: <Service-Principal-GuId>

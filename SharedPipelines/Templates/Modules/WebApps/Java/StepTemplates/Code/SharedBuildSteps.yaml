@@ -1,0 +1,41 @@
+parameters:
+  - name: SonarQube
+    type: object
+  - name: AzureServiceConnection
+    type: string
+  - name: SonarqubeToken
+    type: string
+  - name: isPr
+    type: boolean
+  - name: SourceFolder
+    type: string
+  - name: TestsEnabled
+    type: boolean
+  - name: repositories
+    type: object
+  - name: JavaConfiguration
+    type: object
+
+steps:
+  - checkout: self
+  - checkout: ${{ parameters.repositories.SharedRepository }}
+  - checkout: ${{ parameters.repositories.CommonInfrastructure }}
+  - template: "Build.yaml"
+    parameters:
+      SourceFolder: ${{ parameters.SourceFolder }}
+      JavaConfiguration: ${{ parameters.JavaConfiguration }}
+  - ${{ if eq(parameters.TestsEnabled, true) }}:
+    - template: "/Templates/StepTemplates/SonarQubePrepare.yaml"
+      parameters:
+        WorkingDirectory: ${{ parameters.SourceFolder }}
+        SonarQube: ${{ parameters.SonarQube}}
+    - template: "UnitTest.yaml"
+      parameters:
+        SourceFolder: ${{ parameters.SourceFolder }}
+        JavaConfiguration: ${{ parameters.JavaConfiguration }}
+  - template: "/Templates/StepTemplates/SonarQubeAnalysis.yaml"
+    parameters:
+      SonarQube : ${{ parameters.SonarQube }}
+      AzureServiceConnection: ${{ parameters.AzureServiceConnection }}
+      SonarqubeToken: ${{ parameters.SonarqubeToken }}
+      isPr: ${{ parameters.isPr }}

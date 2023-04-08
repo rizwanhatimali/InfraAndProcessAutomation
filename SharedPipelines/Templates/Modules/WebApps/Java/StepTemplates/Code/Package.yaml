@@ -1,0 +1,14 @@
+parameters:
+  - name: WorkingDirectory
+    type: string
+  - name: StagingDirectory
+    type: string
+steps:
+- task: CopyFiles@2
+  displayName: 'Copy Files to artifact staging directory'
+  inputs:
+    SourceFolder: ${{ parameters.WorkingDirectory }}
+    Contents: '**/*.?(war|jar)'
+    TargetFolder: ${{ parameters.StagingDirectory }}    
+- upload: ${{ parameters.StagingDirectory }}
+  artifact: drop

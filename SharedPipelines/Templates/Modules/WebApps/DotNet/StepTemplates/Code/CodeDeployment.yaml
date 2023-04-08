@@ -1,0 +1,15 @@
+parameters:
+  - name: stage
+    type: object
+
+steps:
+  - task: AzureFunctionApp@1
+    displayName: 'Deploy Azure Function App'
+    inputs:
+      azureSubscription:  ${{ parameters.AzureServiceConnection  }}
+      appType: 'functionApp'
+      appName: ${{ env.AppName }}
+      deployToSlotOrASE: true
+      resourceGroupName: ${{ env.ResourceGroup }}
+      package: '$(Pipeline.Workspace)/app'
+      deploymentMethod: 'auto'

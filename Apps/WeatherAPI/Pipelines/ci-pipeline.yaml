@@ -3,8 +3,16 @@ trigger: none
 extends:
   template: ../../../SharedPipelines/Templates/Modules/WebApps/DotNet/base-ci-template.yaml
   parameters:
+  Config:
     SourceFolder: 'Apps/WeatherApi'
+    ServiceConnection: 
     SonarQube:
       Enabled: false
       QualityGateEnabled: false
       ProjectKey: Apps.WeatherApi
+      ServiceConnection: WeatherAPI Service Principal
+      GlobalVariables: WeatherAPI/Pipelines/Variables/GlobalVariables.yaml@self
+      CommonVariables: WeatherAPI/Pipelines/Variables/Common.yaml@self
+      EnvironmentalVariables: WeatherAPI/Pipelines/Variables/Env/Dev.yaml@self
+      AgentPool: WeatherAPI Build Agents
+    IsDeployment: false

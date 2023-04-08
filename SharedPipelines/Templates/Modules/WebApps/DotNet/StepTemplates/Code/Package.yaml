@@ -1,0 +1,38 @@
+parameters:
+  - name: projectFile
+    type: string
+  - name: WorkingDirectory
+    type: string
+  - name: SharedRepository
+    type: string
+  - name: CommonInfrastructure
+    type: string
+steps:
+  - task: DotNetCoreCLI@2
+    displayName: "Publish Build"
+    inputs:
+      command: publish
+      arguments: '--configuration Release --output $(System.DefaultWorkingDirectory)/publish_output'
+      projects: '${{ parameters.WorkingDirectory }}/**/${{ parameters.projectFile }}'
+      publishWebProjects: false
+      modifyOutputPath: false
+      zipAfterPublish: false
+    condition: succeeded()
+  - task: ArchiveFiles@2
+    displayName: "Package files build artifact"
+    inputs:
+      rootFolderOrFile: "$(System.DefaultWorkingDirectory)/publish_output"
+      includeRootFolder: false
+      archiveFile: "$(Build.ArtifactStagingDirectory)/app/build$(Build.BuildId).zip"
+    condition: succeeded()
+  - task: PublishBuildArtifacts@1
+    displayName: Publish artifact
+    inputs:
+      PathtoPublish: '$(Build.ArtifactStagingDirectory)/app/build$(Build.BuildId).zip'
+      artifactName: app
+  - publish: $(Build.SourcesDirectory)/${{ parameters.SharedRepository }}
+    displayName: Publish ${{ parameters.SharedRepository }}
+    artifact: ${{ parameters.SharedRepository }}
+  - publish: $(Build.SourcesDirectory)/${{ parameters.CommonInfrastructure }}
+    displayName: Publish ${{ parameters.CommonInfrastructure }}
+    artifact: ${{ parameters.CommonInfrastructure }}

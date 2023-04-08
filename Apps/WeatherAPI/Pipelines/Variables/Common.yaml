@@ -1,0 +1,19 @@
+variables:
+  ResourceGroup: RG-Common-Infra-$(Env)
+  Kind: 'app'
+  AppName: weather-api
+  AppPlanName: ASP-Common-Infra-$(Env)
+  LogWorkspace: LOG-Common-Infra-$(Env)
+  LogWorkspaceResourceGroup: $(ResourceGroup)
+  KeyVaultName: KV-Common-Infra-$(Env)
+  KeyVaultResourceGroup: $(ResourceGroup)
+  IntegrationVnetName: VNET-Common-Infra-$(Env)-dev
+  IntegrationSubnetName: subnet-workloads
+  VnetResourceGroup: $(ResourceGroup)
+  AppConfigurationServiceName: APPCS-Common-Infra-$(Env)
+  AppPlanResourceGroup: $(ResourceGroup)
+  StorageAccountName: steCommonEvents$(Env)
+  StorageRetentionPolicy: 112   
+  AuthenticationClientId: a9c93656-f150-4c99-862a-cef21ed3c9d0
+  VNetName: VNET-Common-Infra-$(Env)-dev
+  SubnetName: subnet-workloads

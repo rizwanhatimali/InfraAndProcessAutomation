@@ -12,23 +12,16 @@ parameters:
   - name: buildConfiguration
     type: string
     default: Release
-  - name: SharedRepository
-    type: string
-    default: SharedPipelines
   - name: TestsEnabled
     type: boolean
-  - name: JdkVersion
-    type: string
-    default: '17'
-  - name: JdkArchitecture
-    type: string
-    default: 'x64'
-
+  - name: repositories
+    type: object
 
 steps:
   - checkout: self
-  - checkout: ${{ parameters.SharedRepository }}
-  - template: "SonarQubeTemplates/SonarQubePrepare.yaml"
+  - checkout: ${{ parameters.repositories.SharedRepository }}
+  - checkout: ${{ parameters.repositories.CommonInfrastructure }}
+  - template: "/Templates/StepTemplates/SonarQubePrepare.yaml"
     parameters:
       WorkingDirectory: ${{ parameters.WorkingDirectory }}
       SonarQube: ${{ parameters.SonarQube}}
@@ -41,7 +34,7 @@ steps:
       parameters:
         WorkingDirectory: ${{ parameters.WorkingDirectory }}
         buildConfiguration: ${{ parameters.buildConfiguration }}
-  - template: "SonarQubeTemplates/SonarQubeAnalysis.yaml"
+  - template: "/Templates/StepTemplates/SonarQubeAnalysis.yaml"
     parameters:
       SonarQube : ${{ parameters.SonarQube }}
       AzureServiceConnection: ${{ parameters.AzureServiceConnection }}

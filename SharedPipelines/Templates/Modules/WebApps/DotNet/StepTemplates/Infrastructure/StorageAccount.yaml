@@ -1,0 +1,60 @@
+parameters:
+  - name: stage
+    type: object
+  - name: LogWorkspaceId
+    type: string
+  
+steps:
+  - template: /Templates/Modules/Storage/StepTemplates/StorageAccount.yaml
+    parameters:
+      Subscription: $(Subscription)
+      ServiceConnection: ${{ parameters.stage.ServiceConnection }}
+      ResourceGroup: $(ResourceGroup)
+      StorageAccountName: $(StorageAccountName)
+      RetensionPolicy: $(StorageRetentionPolicy)
+      VnetName: $(StorageVnetName)
+      SubnetName: $(StorageSubnetName)
+      VnetResourceGroup: $(StorageVnetResourceGroup)
+      logWorkspaceId: ${{ parameters.LogWorkspaceId }}
+      Command: ${{ parameters.stage.Command }}
+      CommonInfrastructure: ${{ parameters.stage.repositories.CommonInfrastructure }}
+      SharedRepository: ${{ parameters.stage.repositories.SharedRepository }}
+      KeyVaultName: $(KeyVaultName)
+      KeyVaultResourceGroup: $(KeyVaultResourceGroup)
+  - task: AzurePowerShell@5
+    name: SecretExists
+    displayName: Check to see if the storage account connection string is already in the key vault
+    condition: succeeded()
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      azurePowerShellVersion: LatestVersion
+      ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/DoesSecretExist.ps1
+      pwsh: true
+      ScriptArguments: >
+        -keyVaultName $(KeyVaultName)
+        -SecretName AzureWebJobsStorage-$(StorageAccountName)
+        -VariableName SecretFound
+  - task: AzurePowerShell@5
+    name: GetConnectionString
+    displayName: Get the connection string from $(StorageAccountName)
+    condition: and(succeeded(), eq(variables['SecretFound'], 'false'))
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      azurePowerShellVersion: LatestVersion
+      ScriptType: InlineScript
+      Inline: |
+        $accountKey = Get-AzStorageAccountKey -ResourceGroup $(ResourceGroup) -Name $(StorageAccountName) | Where-Object {$_.KeyName -eq "key1"}
+        Write-Host "##vso[task.setvariable variable=ConnectionString;]$($accountKey.Value)"
+  - task: AzurePowerShell@5
+    name: AddSecret
+    displayName: Add $(StorageAccountName) connection string $(KeyVaultName) as a secret
+    condition: and(succeeded(), eq(variables['SecretFound'], 'false'))
+    inputs:
+      azureSubscription: ${{ parameters.stage.ServiceConnection }}
+      azurePowerShellVersion: LatestVersion
+      ScriptPath:  $(Build.SourcesDirectory)/${{ parameters.stage.repositories.SharedRepository }}/Scripts/CreateSecret.ps1
+      ScriptArguments: >
+        -KeyVaultName $(KeyVaultName)
+        -SecretName AzureWebJobsStorage-$(StorageAccountName)
+        -Value '$(ConnectionString)'
+        -VaildForYears 3

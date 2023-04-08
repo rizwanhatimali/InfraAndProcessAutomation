@@ -1,30 +1,21 @@
-resources:
-  repositories:
-    - repository: SharedPipelines
-      type: git
-      name: SharedPipelines
-
-trigger:
-  branches:
-    include:
-      - main
+trigger: none
 
 extends:
-  template: Templates/Modules/WebApps/DotNet/base-deployment-template.yaml@SharedPipelines
+  template: ../../../SharedPipelines/Templates/Modules/WebApps/DotNet/base-deployment-template.yaml
   parameters:
-    environments:
-      - environment: Dev
-        name: deploy_dev_environment
-        displayName: Deploy to the Dev Environment
-        dependsOn: ['build']
-        isProduction: false
-        AppName: weather-api
-        ResourceGroup: rg-infra-process-automation
-    workingDirectory: 'WeatherAPI'
-    projectFolder: WeatherAPI
-    projectFile: WeatherAPI.csproj
-    ApplicationType: AppService
+  Config:
+    SourceFolder: 'Apps/WeatherApi'
+    ServiceConnection: 
     SonarQube:
       Enabled: false
       QualityGateEnabled: false
-      ProjectKey: Apps.WeatherAPI
+      ProjectKey: Apps.WeatherApi
+      ServiceConnection: Common Service Principal
+      GlobalVariables: WeatherAPI/Pipelines/Variables/GlobalVariables.yaml@self
+      CommonVariables: WeatherAPI/Pipelines/Variables/Common.yaml@self
+      EnvironmentalVariables: WeatherAPI/Pipelines/Variables/Env/Dev.yaml@self
+      AgentPool: Common Build Agents
+      Environments:
+        - Name: POC
+          Variables: WeatherAPI/Pipelines/Variables/Env/POC.yaml@self
+    IsDeployment: true
