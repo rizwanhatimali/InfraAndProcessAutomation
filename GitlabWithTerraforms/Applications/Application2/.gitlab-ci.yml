@@ -1,0 +1,14 @@
+# .gitlab-ci.yml
+
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/terraform-pipeline-template.yml'
+
+variables:
+  TF_Module_Token: ${TF_Token_git_eon__cds_de}
+  TF_ROOT: "${CI_PROJECT_DIR}/src/infrastructure"
+  ARM_CLIENT_ID: ${ARM_CLIENT_ID}
+  ARM_CLIENT_SECRET: ${ARM_CLIENT_SECRET}
+  ARM_TENANT_ID: ${ARM_TENANT_ID}
+  ARM_SUBSCRIPTION_ID: "173ca103-a555-45e3-b5e9-58d11c4f2f72"

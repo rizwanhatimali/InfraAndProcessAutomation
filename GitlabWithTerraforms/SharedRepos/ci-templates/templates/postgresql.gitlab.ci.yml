@@ -1,0 +1,78 @@
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/base-rules.yml'
+
+variables:
+  AZURE_CLIENT_ID: $ARM_CLIENT_ID
+  AZURE_CLIENT_SECRET: $ARM_CLIENT_SECRET
+  AZURE_TENANT_ID: $ARM_TENANT_ID
+  AZURE_KEY_VAULT: 'azure-key-vault-name'
+  POSTGRES_DATABASE_HOST: 'postgresql database host name'
+  POSTGRES_DATABASE_PORT: 'postgresql database port'
+  POSTGRES_DATABASE_NAME: 'postgresql database name'
+  POSTGRES_DATABASE_USER_NAME: 'postgresql database user name'
+  POSTGRES_DATABASE_SECRET_KEY_NAME: 'postgresql database secret key name'
+  POSTGRES_DATABASE_SCHEMA: 'postgres-schema-name'
+  SCRIPTS_PATH: 'path for database scripts'
+  FLYWAY_VERSION: "9.4.0"
+
+  
+stages:
+  - deploy to dev
+  - deploy to test
+  - deploy to production
+
+before_script:    
+    # This script requires OpenJDK version 11 as that is the version supported by latest version of flyway 9.4.0 (at time of writing this script)
+    - apk update && apk add --no-cache openjdk11
+    - java -version
+
+    # Authenticate with Azure
+    - az login --service-principal --username $AZURE_CLIENT_ID --password $AZURE_CLIENT_SECRET --tenant $AZURE_TENANT_ID
+    - export FLYWAY_PASSWORD=$(az keyvault secret show --vault-name $AZURE_KEY_VAULT --name $POSTGRES_DATABASE_SECRET_KEY_NAME --query value -o tsv)   
+    - curl -sSLo flyway.tar.gz https://repo1.maven.org/maven2/org/flywaydb/flyway-commandline/${FLYWAY_VERSION}/flyway-commandline-${FLYWAY_VERSION}.tar.gz
+    - tar -xzf flyway.tar.gz
+
+    # Export Settings and Run Migration
+    - export FLYWAY_HOME=$(pwd)/flyway-${FLYWAY_VERSION}
+    - export PATH=${PATH}:${FLYWAY_HOME}
+ 
+.deploy_template: &deploy_template
+  image: mcr.microsoft.com/azure-cli
+  variables:
+    FLYWAY_URL: jdbc:postgresql://$POSTGRES_DATABASE_HOST:$POSTGRES_DATABASE_PORT/$POSTGRES_DATABASE_NAME
+    FLYWAY_USER: $POSTGRES_DATABASE_USER_NAME
+  script:    
+    - echo "Deploying to ${Stage_Name}"
+    - flyway -X -configFiles=$FLYWAY_HOME/conf/flyway.conf -schemas=$POSTGRES_DATABASE_SCHEMA -locations=filesystem:$SCRIPTS_PATH -baselineOnMigrate=true migrate
+
+deploy database schema to dev environment:
+  stage: deploy to dev
+  variables:
+    Stage_Name: "dev"
+  environment: 
+    dev
+  rules:
+    - !reference [.rules:branches_for_dev, rules]
+  <<: *deploy_template
+
+deploy database schema to test environment:
+  stage: deploy to test
+  variables:
+    Stage_Name: "test"
+  environment: 
+    test
+  rules:
+    - !reference [.rules:branches_for_test_env, rules]
+  <<: *deploy_template
+
+deploy database schema to production environment:
+  stage: deploy to production
+  variables:
+    Stage_Name: "production"
+  environment: 
+    production
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]
+  <<: *deploy_template

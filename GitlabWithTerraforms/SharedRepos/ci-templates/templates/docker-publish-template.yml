@@ -1,0 +1,17 @@
+
+stages:
+  - publish
+    
+build and publish image:
+  image: docker:stable
+  services:
+    - docker:dind
+  stage: publish
+  variables:
+  script:
+    - export REGISTRY_FQDN="${AZR_CR_URL}"
+    - export FULL_IMAGE_NAME="$REGISTRY_FQDN/$DOCKER_IMAGE_NAME"
+    - echo "$ACR_REGISTRY_PASSWORD" | docker login  "${REGISTRY_FQDN}" --username "${ACR_REGISTRY_USER}" --password-stdin
+    - echo "Docker building ${FULL_IMAGE_NAME}"
+    - docker build --tag "${FULL_IMAGE_NAME}:${VERSION_NUMBER}" .
+    - docker push "${FULL_IMAGE_NAME}"

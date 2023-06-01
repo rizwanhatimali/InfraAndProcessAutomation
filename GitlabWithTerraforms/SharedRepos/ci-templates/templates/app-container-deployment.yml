@@ -1,0 +1,11 @@
+
+
+.update_app_image_tag:
+  image:
+    name: mcr.microsoft.com/azure-cli
+  script:
+    - echo "Login to azure using service principal $ARM_CLIENT_ID"   
+    - az login --service-principal -u $ARM_CLIENT_ID -p $ARM_CLIENT_SECRET --tenant $ARM_TENANT_ID
+    - echo "Set the active subscription to $ARM_SUBSCRIPTION_ID"
+    - az account set --subscription $ARM_SUBSCRIPTION_ID
+    - az webapp config container set --name $AZURE_APP_NAME --resource-group $AZURE_RESOURCE_GROUP --docker-custom-image-name $AZURE_REGISTRY_NAME.azurecr.io/$CI_PROJECT_NAME:$VERSION_NUMBER --docker-registry-server-url $AZURE_REGISTRY_NAME.azurecr.io

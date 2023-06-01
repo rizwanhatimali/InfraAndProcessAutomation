@@ -1,0 +1,55 @@
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/terraform-pipeline-template.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/java.gitlab.ci.yml'
+stages:
+  - prepare
+  - validate
+  - build
+  - test
+  - publish
+  - deploy to dev
+  - deploy to test
+  - deploy to production
+
+create deployment plan for dev:
+  needs:
+    - job: calculate version number
+      artifacts: true
+    - job: build and publish image
+    - job: generate openapi specification
+      artifacts: true
+      optional: true
+
+create deployment plan for test:
+  needs:
+    - job: calculate version number
+      artifacts: true
+    - job: build and publish image
+    - job: generate openapi specification
+      artifacts: true
+      optional: true
+
+create deployment plan for production:
+  needs:
+    - job: calculate version number
+      artifacts: true
+    - job: build and publish image
+    - job: generate openapi specification
+      artifacts: true
+      optional: true
+
+deploy app code to dev:
+ rules: 
+  - when: never
+
+deploy app code to test:
+  rules: 
+  - when: never
+
+deploy app code to production:
+  rules: 
+  - when: never

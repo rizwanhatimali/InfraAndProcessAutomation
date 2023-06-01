@@ -1,0 +1,102 @@
+# terraform-pipeline-template.yml
+include:
+  - template: Jobs/SAST-IaC.gitlab-ci.yml
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/base-rules.yml'
+stages:
+  - prepare
+  - test
+
+variables:
+  ARM_CLIENT_ID: ${ARM_CLIENT_ID}
+  ARM_CLIENT_SECRET: ${ARM_CLIENT_SECRET}
+  ARM_TENANT_ID: ${ARM_TENANT_ID}
+  TF_Module_Token: ""
+  ARM_SUBSCRIPTION_ID: ""
+  TF_ROOT: "${CI_PROJECT_DIR}/"
+  TF_CLI_CONFIG_FILE: "${CI_PROJECT_DIR}/.terraformrc"
+  TF_BACKEND_DEV: "dev"
+  TF_BACKEND_TEST: "test"
+  TF_BACKEND_PROD: "prod"
+  TF_CURRENT_BACKEND: "${TF_BACKEND_DEV}"
+  TF_CURRENT_PLAN: "tfplan_dev"
+  TF_ADDRESS: "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/terraform/state"
+  TF_IMAGE: $CI_TEMPLATE_REGISTRY_HOST/gitlab-org/terraform-images/stable:latest
+
+.cache_key: &cache_key
+  key: "${TF_ROOT}"
+  paths:
+    - ${TF_ROOT}/.terraform/
+
+.cache_report: &cache_report
+  reports:
+    terraform: ${TF_ROOT}/${TF_CURRENT_PLAN}.json
+
+.base_before_script: &base_before_script
+  - export TF_HTTP_PASSWORD="${CI_JOB_TOKEN}"
+  - export TF_HTTP_USERNAME="gitlab-ci-token"
+  - export TF_HTTP_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}"
+  - export TF_HTTP_LOCK_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}/lock"
+  - export TF_HTTP_UNLOCK_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}/lock"
+  - echo -e "credentials \"${CI_SERVER_HOST}\" {\n  token = \"${TF_Module_Token}\"\n}" > ${TF_CLI_CONFIG_FILE}
+  - cd $TF_ROOT
+  - terraform --version
+  - terraform init
+
+.apply_infra:
+  image:
+    name: ${TF_IMAGE}
+  before_script:
+    - *base_before_script
+  script:
+    - terraform apply -input=false -auto-approve ${TF_CURRENT_PLAN}
+
+.create_deployment_plan:
+  image:
+    name: ${TF_IMAGE}
+  before_script:
+    - apk --no-cache add jq
+    - alias convert_report="jq -r '([.resource_changes[]?.change.actions?]|flatten)|{\"create\":(map(select(.==\"create\"))|length),\"update\":(map(select(.==\"update\"))|length),\"delete\":(map(select(.==\"delete\"))|length)}'"
+    - *base_before_script
+  script:
+    - terraform plan -var-file="common.tfvars" -var-file="env/${CI_ENVIRONMENT_NAME}.tfvars" -out=${TF_CURRENT_PLAN}
+    - terraform show --json ${TF_CURRENT_PLAN} | convert_report > ${TF_ROOT}/${TF_CURRENT_PLAN}.json
+  artifacts:
+    reports:
+      terraform: ${TF_ROOT}/${TF_CURRENT_PLAN}.json
+    paths:
+      - "${TF_ROOT}/${TF_CURRENT_PLAN}"
+      - "${TF_ROOT}/${TF_CURRENT_PLAN}.json"
+
+format terraform files:
+  stage: prepare
+  image: ${TF_IMAGE}
+  before_script:
+    - *base_before_script
+  script:
+    - terraform fmt -check=true -diff=true -recursive
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+validate terraform configuration:
+  stage: test
+  image: ${TF_IMAGE}
+  before_script:
+    - *base_before_script
+  script:
+    - terraform validate
+  needs:
+    - "format terraform files"
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+kics-iac-sast:
+  needs:
+    - "validate terraform configuration"
+  rules:
+    - if: $SAST_DISABLED == "true" || $SAST_DISABLED == "1"
+      when: never
+    - if: $SAST_EXCLUDED_ANALYZERS =~ /kics/
+      when: never
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"

@@ -1,0 +1,126 @@
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/version-template.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/docker-publish-template.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/base-rules.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/sonarqube.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/app-container-deployment.yml'
+
+variables:
+  BUILD_API_SPEC: "false"
+  openapi_specification: ""
+  
+stages:
+  - prepare
+  - build
+  - test
+  - publish
+  - deploy to dev
+  - deploy to test
+  - deploy to production
+
+.openapi_app_configuration:
+  - echo ""
+
+unit_tests:
+  cache:
+    key: "${CI_COMMIT_REF_SLUG}-${CI_JOB_NAME}"
+    paths:
+      - ${POETRY_CACHE_DIR}
+      - ${VENV_DIR}
+      - ${PIP_CACHE_DIR}
+  before_script:
+    - pip install --upgrade pip
+    - pip install poetry
+    - poetry config cache-dir ${POETRY_CACHE_DIR}
+    - poetry install
+  stage: test
+  script:
+    - ENV=test poetry run pytest --cov=carconnect --cov-report=xml:coverage.xml
+  coverage: '/(?i)total.*? (100(?:\.0+)?\%|[1-9]?\d(?:\.\d+)?\%)$/'
+  artifacts:
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: coverage.xml
+  # Define the matrix of Python versions to test
+  parallel:
+    matrix:
+      - PY_VERSION: ["3.10", "3.11"]
+  image: python:${PY_VERSION}
+  tags:
+    - docker
+  rules:
+    - !reference [.rules:branches_for_testing, rules]
+
+generate openapi specification:
+  stage: build
+  image: python:3.11
+  before_script:
+    - pip install --upgrade pip
+    - pip install poetry
+    - poetry config cache-dir ${POETRY_CACHE_DIR}
+    - poetry install
+    - !reference [.openapi_app_configuration]
+  script:
+    - ENV=$Open_Api_Build poetry run start &
+    - sleep 30s # give your application some time to start up
+    - curl -o openapi.json "${API_SPEC_URL}"
+  artifacts:
+    paths:
+      - openapi.json
+  rules:
+    - !reference [.rules:branches_for_testing, rules]
+    - if: $BUILD_API_SPEC != "true"
+      when: never
+
+sonarqube-check:
+  stage:  test
+  variables:
+    EXTRA_SONAR_PROPERTIES: "-Dsonar.python.coverage.reportPaths=coverage.xml"
+  needs: 
+    - job: unit_tests
+      artifacts: true
+
+build and publish image:
+  needs:
+    - job: calculate version number
+      artifacts: true
+    - job: unit_tests
+      artifacts: true
+    - job: sonarqube-check
+  rules:
+    - !reference [.rules:branches_for_image_publishing, rules]
+
+deploy app code to dev:
+  extends: .update_app_image_tag
+  stage: deploy to dev
+  environment:
+    name: dev
+  rules:
+    - !reference [.rules:branches_for_dev, rules]
+
+deploy app code to test:
+  extends: .update_app_image_tag
+  stage: deploy to test
+  environment:
+    name: test
+  rules:
+    - !reference [.rules:branches_for_test_env, rules]
+
+deploy app code to production:
+  extends: .update_app_image_tag
+  stage: deploy to production
+  environment: 
+    name: production
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]

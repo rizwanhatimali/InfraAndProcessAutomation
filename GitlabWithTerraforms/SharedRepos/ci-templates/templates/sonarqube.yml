@@ -1,0 +1,27 @@
+variables:
+  SONAR_TOKEN: ${Sonarqube_Token}
+  SONAR_HOST_URL: "https://sonar.eon-cds.de"
+  EXTRA_SONAR_PROPERTIES: ""
+  SONAR_PROJECT_KEY: "${CI_PROJECT_NAME}"
+
+.rules:sonarqube:
+   rules:
+    - if: $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == "develop" || $CI_COMMIT_REF_NAME =~ /^release/ || $CI_PIPELINE_SOURCE == "merge_request_event"
+
+sonarqube-check:
+  image:
+    name: sonarsource/sonar-scanner-cli:latest
+    entrypoint: [""]
+  variables:
+    SONAR_USER_HOME: "${CI_PROJECT_DIR}/.sonar"  # Defines the location of the analysis task cache
+    GIT_DEPTH: "0"  # Tells git to fetch all the branches of the project, required by the analysis task
+  cache:
+    key: "${CI_JOB_NAME}"
+    paths:
+      - .sonar/cache
+  script:
+    - sonar-scanner -Dsonar.host.url=$SONAR_HOST_URL -Dsonar.login=$SONAR_TOKEN -Dsonar.projectKey=$SONAR_PROJECT_KEY -Dsonar.projectName=${CI_PROJECT_TITLE}  -Dsonar.qualitygate.wait=true $EXTRA_SONAR_PROPERTIES
+  allow_failure: true
+  rules:
+    - !reference [.rules:sonarqube, rules]
+ 

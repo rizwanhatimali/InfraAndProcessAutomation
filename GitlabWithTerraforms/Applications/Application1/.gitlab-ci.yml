@@ -1,0 +1,9 @@
+# .gitlab-ci.yml
+
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/terraform-pipeline-template.yml'
+
+variables:
+  TF_ROOT: "${CI_PROJECT_DIR}/src/infrastructure"

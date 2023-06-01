@@ -1,0 +1,28 @@
+.rules:branches_for_testing:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == "develop" || $CI_COMMIT_REF_NAME =~ /^release/
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+
+.rules:branches_for_dev:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_REF_NAME == "develop"
+
+.rules:branches_for_test_env:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == "develop" || $CI_COMMIT_REF_NAME =~ /^release/
+
+.rules:branches_for_prod_env:
+  rules:
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never
+    - if: $CI_COMMIT_REF_NAME == "main"
+
+.rules:branches_for_image_publishing:
+  rules:
+    - if: $CI_COMMIT_REF_NAME == "main" || $CI_COMMIT_REF_NAME == "develop" || $CI_COMMIT_REF_NAME =~ /^release/
+    - if: $CI_PIPELINE_SOURCE == "merge_request_event"
+      when: never  

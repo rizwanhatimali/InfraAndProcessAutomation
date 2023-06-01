@@ -1,0 +1,188 @@
+# terraform-pipeline-template.yml
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/terraform/terraform-base.yml'
+
+stages:
+  - prepare
+  - test
+  - deploy to dev
+  - deploy to test
+  - deploy to production
+
+variables:
+  ARM_CLIENT_ID: ${ARM_CLIENT_ID}
+  ARM_CLIENT_SECRET: ${ARM_CLIENT_SECRET}
+  ARM_TENANT_ID: ${ARM_TENANT_ID}
+  TF_ROOT: "${CI_PROJECT_DIR}/"
+  TF_CLI_CONFIG_FILE: "${CI_PROJECT_DIR}/.terraformrc"
+  TF_BACKEND_DEV: "dev"
+  TF_BACKEND_TEST: "test"
+  TF_BACKEND_PROD: "prod"
+  TF_CURRENT_BACKEND: "${TF_BACKEND_DEV}"
+  TF_CURRENT_PLAN: "tfplan_dev"
+  TF_ADDRESS: "https://${CI_SERVER_HOST}/api/v4/projects/${CI_PROJECT_ID}/terraform/state"
+  TF_IMAGE: $CI_TEMPLATE_REGISTRY_HOST/gitlab-org/terraform-images/stable:latest
+  OUTPUT_DIR : "planning_outputs" 
+
+.cache_key: &cache_key
+  key: "${TF_ROOT}"
+  paths:
+    - ${TF_ROOT}/.terraform/
+
+.cache_report: &cache_report
+  reports:
+    terraform: ${TF_ROOT}/${TF_CURRENT_PLAN}.json
+
+.pre_apply_terraform:
+ - echo ""
+
+.load_terraform_variables:
+ - echo ""
+
+.after_create_plan:
+ - echo ""
+
+.base_deployment_plan_paths: &base_deployment_plan_paths
+  - "${TF_ROOT}/${TF_CURRENT_PLAN}"
+  - "${TF_ROOT}/${TF_CURRENT_PLAN}.json"
+
+.base_before_script: &base_before_script
+  - export TF_HTTP_PASSWORD="${CI_JOB_TOKEN}"
+  - export TF_HTTP_USERNAME="gitlab-ci-token"
+  - export TF_HTTP_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}"
+  - export TF_HTTP_LOCK_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}/lock"
+  - export TF_HTTP_UNLOCK_ADDRESS="${TF_ADDRESS}/${TF_CURRENT_BACKEND}/lock"
+  - echo -e "credentials \"${CI_SERVER_HOST}\" {\n  token = \"${TF_Module_Token}\"\n}" > ${TF_CLI_CONFIG_FILE}
+  - cd $TF_ROOT
+  - terraform --version
+  - terraform init
+
+.create_deployment_plan_before: &create_deployment_plan_before
+  - apk --no-cache add jq
+  - alias convert_report="jq -r '([.resource_changes[]?.change.actions?]|flatten)|{\"create\":(map(select(.==\"create\"))|length),\"update\":(map(select(.==\"update\"))|length),\"delete\":(map(select(.==\"delete\"))|length)}'"
+  - export TF_VAR_VERSION_NUMBER="${VERSION_NUMBER}"
+  - export TF_VAR_AZR_CR_URL="${AZR_CR_URL}"
+  - *base_before_script
+
+.apply_infra:
+  image:
+    name: ${TF_IMAGE}
+  before_script:
+    - cp ${TF_ROOT}/${OUTPUT_DIR}/* ${TF_ROOT}/
+    - !reference [.pre_apply_terraform]
+    - !reference [.base_before_script]
+  script:
+    - terraform apply -input=false -auto-approve ${TF_CURRENT_PLAN}
+
+.create_deployment_plan:
+  image:
+    name: ${TF_IMAGE}
+  before_script:
+    - !reference [.load_terraform_variables]
+    - *create_deployment_plan_before
+  script:
+    - terraform plan -var-file="common.tfvars" -var-file="env/${CI_ENVIRONMENT_NAME}.tfvars" -out=${TF_CURRENT_PLAN}
+    - terraform show --json ${TF_CURRENT_PLAN} | convert_report > ${TF_ROOT}/${TF_CURRENT_PLAN}.json
+    - |-
+      DIR="${TF_ROOT}/${OUTPUT_DIR}" 
+      if [ ! -d "$DIR" ]; then 
+        mkdir -p "$DIR" 
+      else
+        rm -r "$DIR"/*
+      fi
+    - cp ${TF_ROOT}/${TF_CURRENT_PLAN} ${TF_ROOT}/${OUTPUT_DIR}/${TF_CURRENT_PLAN}
+    - cp ${TF_ROOT}/${TF_CURRENT_PLAN}.json ${TF_ROOT}/${OUTPUT_DIR}/${TF_CURRENT_PLAN}.json
+    - !reference [.after_create_plan]
+  artifacts:
+    reports:
+      terraform: ${TF_ROOT}/${OUTPUT_DIR}/${TF_CURRENT_PLAN}.json
+    paths:
+      - "${TF_ROOT}/${OUTPUT_DIR}"
+
+create deployment plan for dev:
+  extends: .create_deployment_plan
+  stage: deploy to dev
+  environment:
+    name: dev
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_DEV
+    TF_CURRENT_PLAN: tfplan_dev
+  rules:
+    - !reference [.rules:branches_for_dev, rules]
+
+deploy to dev:
+  extends: .apply_infra
+  stage: deploy to dev
+  environment:
+    name: dev
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_DEV
+    TF_CURRENT_PLAN: tfplan_dev
+  needs:
+    - "create deployment plan for dev"
+  when: on_success
+  rules:
+    - !reference [.rules:branches_for_dev, rules]
+
+create deployment plan for test:
+  extends: .create_deployment_plan
+  stage: deploy to test
+  environment:
+    name: test
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_TEST
+    TF_CURRENT_PLAN: tfplan_test
+  when: manual
+  rules:
+    - !reference [.rules:branches_for_test_env, rules]
+
+deploy to test:
+  extends: .apply_infra
+  stage: deploy to test
+  environment:
+    name: test
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_TEST
+    TF_CURRENT_PLAN: tfplan_test
+  needs:
+    - "create deployment plan for test"
+  rules:
+    - !reference [.rules:branches_for_test_env, rules]
+
+create deployment plan for production:
+  extends: .create_deployment_plan
+  stage: deploy to production
+  environment:
+    name: production
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_PROD
+    TF_CURRENT_PLAN: tfplan_prod
+  when: manual
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]
+
+approve deployment plan:
+  stage: deploy to production
+  script:
+    - echo "Manual approval step for applying changes in the production environment"
+  allow_failure: true
+  when: manual
+  needs:
+    - "create deployment plan for production"
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]
+
+deploy to production:
+  extends: .apply_infra
+  stage: deploy to production
+  environment:
+    name: production
+  variables:
+    TF_CURRENT_BACKEND: $TF_BACKEND_PROD
+    TF_CURRENT_PLAN: tfplan_prod
+  needs:
+    - "approve deployment plan"
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]

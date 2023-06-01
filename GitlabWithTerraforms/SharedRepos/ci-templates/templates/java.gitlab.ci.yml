@@ -1,0 +1,120 @@
+include:
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/version-template.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/docker-publish-template.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/base-rules.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/sonarqube.yml'
+  - project: 'emobility/global-emobility/eon-drive-devops/ci-templates'
+    ref: main                                      # Git branch
+    file: '/templates/app-container-deployment.yml'
+
+variables:
+  AZURE_APP_NAME: "your-azure-webapp-name"
+  MAVEN_IMAGE: "maven:3.8.1-openjdk-17"
+  BUILD_API_SPEC: "false"
+  openapi_specification: ""
+  
+stages:
+  - prepare
+  - build
+  - test
+  - publish
+  - deploy to dev
+  - deploy to test
+  - deploy to production
+
+cache:
+  paths:
+    - .m2/repository
+
+.openapi_app_configuration:
+  - echo "No configuration parameters for the app provided"
+
+build:
+  stage: build
+  image: $MAVEN_IMAGE
+  script:
+    - mvn clean verify
+  artifacts:
+    paths:
+      - target/*.jar
+      - target/site/jacoco/jacoco.xml
+    expire_in: 1 week
+    reports:
+      coverage_report:
+        coverage_format: cobertura
+        path: target/site/jacoco/jacoco.xml
+  rules:
+    - !reference [.rules:branches_for_testing, rules]
+
+generate openapi specification:
+  stage: build
+  image: $MAVEN_IMAGE
+  before_script:
+    - !reference [.openapi_app_configuration]
+  script:
+    - mvn spring-boot:run &
+    - sleep 60s # give your application some time to start up
+    - mvn springdoc-openapi:generate
+    - openapi_specification=$(<target/openapi.json)
+    - echo openapi_specification="$openapi_specification" >> openapi_specification.env 
+  artifacts:
+    reports:
+      dotenv: openapi_specification.env
+    paths:
+      - target/openapi.json
+      - openapi_specification.env
+  rules:
+    - !reference [.rules:branches_for_testing, rules]
+    - if: $BUILD_API_SPEC != "true"
+      when: never
+    
+
+sonarqube-check:
+  stage:  test
+  variables:
+    EXTRA_SONAR_PROPERTIES: "-Dsonar.java.coveragePlugin=jacoco -Dsonar.coverage.jacoco.xmlReportPaths=target/site/jacoco/jacoco.xml -Dsonar.java.binaries=target"
+  needs: 
+    - job: build
+      artifacts: true
+
+build and publish image:
+  needs:
+    - job: calculate version number
+      artifacts: true
+    - job: build
+      artifacts: true
+    - job: sonarqube-check
+  rules:
+    - !reference [.rules:branches_for_image_publishing, rules]
+
+deploy app code to dev:
+  extends: .update_app_image_tag
+  stage: deploy to dev
+  environment:
+    name: dev
+  rules:
+    - !reference [.rules:branches_for_dev, rules]
+
+deploy app code to test:
+  extends: .update_app_image_tag
+  stage: deploy to test
+  environment:
+    name: test
+  rules:
+    - !reference [.rules:branches_for_test_env, rules]
+
+deploy app code to production:
+  extends: .update_app_image_tag
+  stage: deploy to production
+  environment: 
+    name: production
+  rules:
+    - !reference [.rules:branches_for_prod_env, rules]
